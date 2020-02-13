@@ -1,0 +1,261 @@
+(function($) {
+
+// Avoid `console` errors in browsers that lack a console.
+if (!(window.console && console.log)) {
+    (function() {
+        var noop = function() {};
+        var methods = ['assert', 'clear', 'count', 'debug', 'dir', 'dirxml', 'error', 'exception', 'group', 'groupCollapsed', 'groupEnd', 'info', 'log', 'markTimeline', 'profile', 'profileEnd', 'markTimeline', 'table', 'time', 'timeEnd', 'timeStamp', 'trace', 'warn'];
+        var length = methods.length;
+        var console = window.console = {};
+        while (length--) {
+            console[methods[length]] = noop;
+        }
+    }());
+}
+
+/* Globals
+   -------------------------------------------------------------------------- */
+var W = window;
+var $W = $(W);
+var timeout; // used to debounce the window resize handler
+var namespace = 'hbr'; // used to namespace jquery events
+var hoverConnectButton = false;
+var timeoutConnectButton;
+
+/* Functions
+   -------------------------------------------------------------------------- */
+
+function replaceOnResize() {
+
+    // Desktop
+    if (matchMedia('only screen and (min-width: 721px)').matches) {
+        $("#menu, .portal-list, .follow-links, .magsquare, .newsletter-access, #trigger-login").removeClass('visible');
+        $("#menu").insertAfter("#sub-menu");
+        
+        $(".follow-links").appendTo("#menu");
+        $(".widget-last-issue").prependTo('.widget-area');
+
+        $(".magsquare").appendTo("#header");
+        $(".newsletter-access").appendTo("#header");
+        $(".portal-list").appendTo("#header");
+        $("#trigger-login").insertAfter("#logo");
+
+        $("#trigger-search").appendTo("#menu");
+        $(".searchform").appendTo("#menu");
+    }
+    // mobile
+    else {
+        $(".follow-links").insertAfter(".mean-nav");
+        $(".portal-list").insertAfter(".mean-nav");
+
+        $("#trigger-login").insertAfter(".mean-nav");
+        $(".newsletter-access").insertAfter(".mean-nav");
+        $(".magsquare").insertAfter(".mean-nav");
+
+        $("#menu").insertAfter(".mean-nav");
+        $(".widget-last-issue").insertAfter('#content>.entry-featured');
+
+        $("#trigger-search").insertAfter("#logo");
+        $(".searchform").insertAfter("#trigger-search");
+    }
+}
+
+/* Initializations
+   -------------------------------------------------------------------------- */
+
+// Initialize tabs
+$( "#tabs, #tabs-issues" ).tabs();
+
+// Initialize tooltips
+$('.entry-content').tooltip();
+
+//Html5 PLaceholder fallback for ie7+
+$("input, textarea").placeholder();
+
+// Fitvids
+if ( $.isFunction($.fn.fitVids) ) {
+    $("#content, #sidebar").fitVids({ customSelector: "iframe" });
+}
+
+// Responsive nav
+$('#sub-menu').meanmenu({
+    meanRevealPosition: "right",
+    meanScreenWidth: "720",
+});
+
+
+// Debounce handler when the window is resized
+$W.on('resize.' + namespace, function() {
+    timeout && clearTimeout(timeout);
+    timeout = setTimeout(replaceOnResize, 300);
+
+});
+
+replaceOnResize();
+
+$('.meanmenu-reveal').on('click',function(e) {
+    $('.searchform, .login-space, .veil').removeClass('visible');
+    $("#menu, .portal-list, .follow-links, .magsquare, .newsletter-access, #trigger-login").toggleClass('visible');
+    e.preventDefault();
+});
+
+// Flexslider
+$('.flexslider').css('display', 'block').flexslider({
+    animation: "slide",
+    start: function(){
+        $('.flexslider img').show();
+    }
+});
+
+// Replace all SVG images with inline SVG
+$('img.svg').each(function(){
+    var $img = $(this);
+    var imgID = $img.attr('id');
+    var imgClass = $img.attr('class');
+    var imgURL = $img.attr('src');
+
+    $.get(imgURL, function(data) {
+        // Get the SVG tag, ignore the rest
+        var $svg = $(data).find('svg');
+        // Add replaced image's ID to the new SVG
+        if(typeof imgID !== 'undefined') {
+            $svg = $svg.attr('id', imgID);
+        }
+        // Add replaced image's classes to the new SVG
+        if(typeof imgClass !== 'undefined') {
+            $svg = $svg.attr('class', imgClass+' replaced-svg');
+        }
+        // Remove any invalid XML tags as per http://validator.w3.org
+        $svg = $svg.removeAttr('xmlns:a');
+        // Replace image with new SVG
+        $img.replaceWith($svg);
+
+    }, 'xml');
+
+});
+
+// Beahvior for portal list
+$('#trigger-portal').on('click', function(e) {
+    $('#trigger-portal span').toggleClass('icon-arrow-down icon-arrow-up');
+    $('#portals').slideToggle();
+    e.preventDefault();
+});
+
+// Beahvior for filter dropdown
+$('.trigger-filter').on('click', function(e) {
+    $('#filter').focus();
+    e.preventDefault();
+});
+
+// Beahvior for executive summary and special bloc
+$('#executive-trigger').on('click', function(e) {
+    $('.executive-summary').toggleClass('visible');
+    $(this).toggleClass('underline');
+    e.preventDefault();
+});
+$('.executive-close').on('click', function(e) {
+    $('.executive-summary').toggleClass('visible');
+    $('#executive-trigger').removeClass('underline');
+    e.preventDefault();
+});
+
+$('.entry-content').on('click','.trigger-bloc', function(e) {
+    $(this).closest('h3').next('.special-content').slideToggle('fast');
+    e.preventDefault();
+});
+
+// Beahvior for responsive
+$('#trigger-search').on('click', function(e) {
+    if($('.login-space').hasClass('visible')) {
+
+    } else {
+        $('.veil').toggleClass('visible');
+    }
+
+    if($("#menu, .portal-list, .follow-links, .magsquare, .newsletter-access, #trigger-login").hasClass('visible')) {
+        $('.meanmenu-reveal').trigger("click");
+        $('.veil').addClass('visible');
+    }
+
+    $('.login-space').removeClass('visible');
+    $('.searchform').toggleClass('visible');
+    e.preventDefault();
+});
+
+$('#search-close').on('click', function(e) {
+    $('.veil').toggleClass('visible');
+    $('.searchform').toggleClass('visible');
+    e.preventDefault();
+});
+
+$('#trigger-login').on('click', function(e) {
+    if($('.searchform').hasClass('visible')) {
+
+    } else {
+        $('.veil').toggleClass('visible');
+    }
+
+    if($("#menu, .portal-list, .follow-links, .magsquare, .newsletter-access, #trigger-login").hasClass('visible')) {
+        $('.meanmenu-reveal').trigger("click");
+        $('.veil').addClass('visible');
+    }
+
+    $('.searchform').removeClass('visible');
+    $('.login-space').toggleClass('visible');
+    e.preventDefault();
+});
+
+$('#trigger-login').on('mouseenter', function(e) {
+    if(window.innerWidth > 720) {
+        hoverConnectButton = true;
+        $('.login-space').addClass('visible');
+    }
+});
+
+$('#trigger-login').on('mouseleave', function(e) {
+    if(window.innerWidth > 720) {
+        hoverConnectButton = false;
+        if(timeoutConnectButton) {
+            clearTimeout(timeoutConnectButton);
+        }
+        timeoutConnectButton = setTimeout(function() {
+            if(!hoverConnectButton) {
+                $('.login-space').removeClass('visible');
+            }
+        }, 300);
+    }
+});
+
+$('.login-space').on('mouseenter', function(e) {
+    if(window.innerWidth > 720) {
+        hoverConnectButton = true;
+    }
+});
+
+$('.login-space').on('mouseleave', function(e) {
+    if(window.innerWidth > 720) {
+        hoverConnectButton = false;
+        if(timeoutConnectButton) {
+            clearTimeout(timeoutConnectButton);
+        }
+        timeoutConnectButton = setTimeout(function() {
+            if(!hoverConnectButton && !$(':focus').parent().hasClass('bea-pws-login-form')) {
+                $('.login-space').removeClass('visible');
+            }
+        }, 300);
+    }
+});
+
+$('.veil').on('click', function(e) {
+    $(this).removeClass('visible');
+    $('.searchform').removeClass('visible');
+    $('.login-space').removeClass('visible');
+    e.preventDefault();
+});
+
+// Auto submit form
+$( '#filter' ).change(function(){
+    $( '#search-by-form' ).submit();
+});
+
+}(jQuery));

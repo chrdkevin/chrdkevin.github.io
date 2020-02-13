@@ -1,0 +1,62 @@
+/**
+ * Created by Marketshot on 10/05/16.
+ */
+/**
+ *
+ * @param name
+ * @returns {*}
+ */
+function readCookie(name) {
+    var nameEQ = name + "=";
+    var ca = document.cookie.split(';');
+    for (var i = 0; i < ca.length; i++) {
+        var c = ca[i];
+        while (c.charAt(0) == ' ') c = c.substring(1, c.length);
+        if (c.indexOf(nameEQ) == 0) return c.substring(nameEQ.length, c.length);
+    }
+    return null;
+
+}
+
+function parseQuery(query) {
+    var Params = new Object();
+    if (!query) return Params; // return empty object
+    var Pairs = query.split(/[;&]/);
+    for (var i = 0; i < Pairs.length; i++) {
+        var KeyVal = Pairs[i].split('=');
+        if (!KeyVal || KeyVal.length != 2) continue;
+        var key = unescape(KeyVal[0]);
+        var val = unescape(KeyVal[1]);
+        val = val.replace(/\+/g, ' ');
+        Params[key] = val;
+    }
+    return Params;
+}
+
+var scripts = document.getElementsByTagName('script');
+var myScript = scripts[scripts.length - 1];
+var queryString = myScript.src.replace(/^[^\?]+\??/, '');
+var params = parseQuery(queryString);
+var partner = params.partner;
+
+var mics_vid_value = readCookie('mics_vid');
+
+if (partner == undefined || partner == null) {
+    partner = 'default';
+}
+
+if (mics_vid_value != null && partner != null) {
+    var url = "https://live.marketshot.com/mics/" + partner + "/tags.html",
+        url = url + "?mics_vid=" + mics_vid_value;
+
+    (function () {
+        var f = document.createElement('iframe');
+        f.async = true;
+        f.width = 0;
+        f.height = 0;
+        f.style.display = 'none';
+        f.src = url;
+        var s = document.body;
+        s.insertBefore(f, s.firstChild);
+    })();
+}

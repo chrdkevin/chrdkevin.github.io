@@ -1,0 +1,557 @@
+(function($, window) {
+    'use strict';
+    var namespace = 'PMD';
+
+    // POLYFILL for closest native javascript... IE9+
+    if (!Element.prototype.matches) Element.prototype.matches = Element.prototype.msMatchesSelector;
+    if (!Element.prototype.closest) Element.prototype.closest = function (selector) {
+        var el = this;
+        while (el) {
+            if (el.matches(selector)) {return el;}
+            el = el.parentElement;
+        }
+    };
+
+    var pluginName = 'modalSubscription';
+    var document = window.document;
+
+    var currentStep = 0;
+    var opened = false;
+    var force = false;
+    var top = 0;
+
+    var Plugin = function(options) {
+        var self = this;
+        var defaults = {
+            legalTriggerSelector: '.pmd-ms-legal-trigger',
+            innerWrapperClass: 'pmd-ms-inner',
+            scrollable: false,
+            closeClass: 'pmd-ms-close',
+            popinClass: 'pmd-ms-popin',
+            popinTitleClass: 'pmd-ms-title',
+            cancelClass: 'pmd-ms-cancel',
+            wrappedPopinClass: 'popin-wrapped',
+            toggleBtnCheckerClass: 'js-toggle-btn',
+
+            errorClass: 'pmd-ms-error',
+            errorMsgClass: 'pmd-ms-error-msg',
+            errorTplClass: 'pmd-ms-error-tpl',
+            errorGenMsgTitle: 'Une erreur est survenue',
+            errorGenMsgContent: 'Merci de reessayer ulterieurement',
+
+            legalElClass: 'pmd-ms-legal',
+            formClass: "pmd-ms-form",
+            submitBtnClass: "pmd-ms-submit",
+
+            inClass: "pmd-ms-enter",
+            outClass: "pmd-ms-exit",
+            requiredLink: "data-pmd-ms-require-link",
+            urlParamName: 'pmd_news_visited',
+            urlParamValue: '1',
+            cookie: {
+                name: 'pmd_news_visited',
+                value: 1,
+                options: {
+                    expires: 15,
+                    path: '/'
+                }
+            },
+            popinTopPosition: 0.4,
+            url: '',
+            stepFiles : [],
+        };
+
+        self.$modal = $('.pmd-ms');
+        self.$elemWrap = $('.pmd-ms-wrapper');
+
+        self.$currentStep = $('#currentStep');
+        self.$elemWrap.elHeight = self.$elemWrap[0].clientHeight;
+
+        self.options = $.extend({}, defaults, options);
+        // self.pathName = window.location.origin;
+
+        self.init();
+    };
+
+    Plugin.prototype.animateModal = function(cssClass) {
+        var self = this;
+        self.$elemWrap
+            .removeClass(self.options.inClass)
+            .removeClass(self.options.outClass)
+            .addClass(cssClass);
+    };
+
+    Plugin.prototype.open = function(isForced) {
+        var self = this;
+        force = isForced;
+
+        if (currentStep === 0) {
+            top = force ? 0 : top;
+        }
+        if (!opened || force) {
+            opened = true;
+
+            self.animateModal(self.options.inClass, true);
+            self.$modal.addClass(self.options.popinClass);
+
+            var $elem = $('.' + self.options.popinClass);
+            $elem.css('top', top);
+
+            if (self.isElementInViewport()) {
+                $elem.addClass(self.options.wrappedPopinClass);
+            }
+
+            if (force) {
+                currentStep = 0;
+                self.getCurrent();
+
+                self.$elemWrap
+                    .addClass('forceOpened')
+                    .bind('animationend', function () {
+                        self.$modal.addClass(self.options.popinClass);
+                    });
+            }
+        }
+    };
+
+    Plugin.prototype.close = function(forGood) {
+        var self = this;
+        if(opened) {
+            self.animateModal(self.options.outClass);
+            opened = false;
+
+            if(forGood) {
+                self.$elemWrap.bind('animationend', function () {
+                    self.$modal.removeClass(self.options.popinClass);
+                    self.$elemWrap.removeClass(self.options.outClass);
+                });
+
+                $(window).off("scroll", self.showElement);
+                $(window).off("animationend", self.open);
+
+                var cookie = self.options.cookie;
+                self.cookie(cookie.name, cookie.value, cookie.options);
+
+                $('.' + self.options.popinClass).removeClass(self.options.wrappedPopinClass);
+            }
+        }
+    };
+
+    Plugin.prototype.setTitle = function() {
+        var self = this;
+        $('.' + self.options.popinTitleClass).html(self.options.stepFiles[currentStep].popinTitle);
+    };
+
+    Plugin.prototype.closeForGood = function() {
+        var self = this;
+        self.$elemWrap.on('click', '.' + self.options.closeClass, function(e) {
+            e.preventDefault();
+            if (self.$elemWrap.hasClass('forceOpened')) {
+                self.close();
+            } else {
+                self.close(true);
+            }
+        });
+    };
+
+    Plugin.prototype.getCurrent = function() {
+        var self = this;
+
+        // self.ajaxGet(self.pathName + '/' + self.options.stepFiles[currentStep].url)
+        self.ajaxGet(self.options.stepFiles[currentStep].url)
+            .done(function(response) {
+                $('.' + self.options.innerWrapperClass).html(response);
+                self.setTitle();
+                self.displayLegal();
+                self.closeForGood();
+                self.submitForm();
+                self.toggleSubmitBtnState();
+            });
+    };
+
+    Plugin.prototype.toggleSubmitBtnState = function() {
+        var self = this;
+        var $btn = $('.' + self.options.submitBtnClass);
+        var isEnabled = false;
+        var notEmptyItemsCount = 0;
+
+        $('.' + self.options.toggleBtnCheckerClass).on('change', function() {
+            if ($(this).val().length > 0) {
+                notEmptyItemsCount++;
+            } else {
+                notEmptyItemsCount--;
+            }
+
+            isEnabled = currentStep === 0
+
+                ? ( $('.pmd-check-required input').is(':checked') && $('.pmd-check-newsletter input').is(':checked') )
+                : (notEmptyItemsCount > 0);
+
+            if (isEnabled) {
+                self.enableSubmitBtn($btn);
+            } else {
+                self.disableSubmitBtn($btn);
+            }
+
+        });
+    };
+
+    Plugin.prototype.enableSubmitBtn = function($btn) {
+        var attr = $btn.attr('disabled');
+
+        // For some browsers, `attr` is undefined; for others,
+        // `attr` is false.  Check for both.
+        if (typeof attr !== typeof undefined && attr !== false) {
+            $btn.removeAttr('disabled');
+        }
+    };
+
+    Plugin.prototype.disableSubmitBtn = function($btn) {
+        $btn.attr('disabled', 'disabled');
+    };
+
+    Plugin.prototype.cookieExists = function(name) {
+        return this.cookie(name) !== undefined;
+    };
+
+    Plugin.prototype.removeCookie = function(name) {
+        var self = this;
+        var cookie = self.options.cookie;
+
+        if (!self.cookieExists(name)) {
+            return false;
+        }
+
+        self.cookie(name, '', { expires: -1 });
+        return !self.cookie(name);
+    };
+
+    Plugin.prototype.cookie = function(name, value, options) {
+        var cookie = this.options.cookie;
+
+        // Write
+        if (value !== undefined) {
+            options = $.extend({}, cookie.options, options);
+
+            if (typeof options.expires === 'number') {
+                var days = options.expires;
+                var t = options.expires = new Date();
+                t.setTime(t.getTime() + (days*24*60*60*1000));
+            }
+
+            return (document.cookie = [
+                name, '=', value,
+                options.expires ? '; expires=' + options.expires.toUTCString() : '',
+                options.path ? '; path=' + options.path : ''
+            ].join(''));
+        }
+
+        // Read
+        var result = name ? undefined : {};
+        var cookies = document.cookie ? document.cookie.split('; ') : [];
+
+        for (var i = 0; i < cookies.length; i++) {
+            var c = cookies[i].trim();
+            var parts = c.split('=');
+
+            if (name && name == parts.shift()) {
+                return parts.shift();
+            }
+        }
+        return result;
+    };
+
+    Plugin.prototype.isElementShown = function() {
+        var self = this;
+        var el = self.$elemWrap[0];
+        var rect = el.getBoundingClientRect();
+
+        return (
+        rect.top >= (0 - self.$elemWrap.elHeight) &&
+        rect.bottom <= (window.innerHeight + self.$elemWrap.elHeight )
+        );
+    };
+
+    Plugin.prototype.isElementInViewport = function() {
+        var self = this;
+
+        if (self.options.popinTopPosition) {
+            var body = document.body,
+                html = document.documentElement;
+
+            // imposer max height au docHeight, sinon pour les pages trop longues le popin s'affiche en dehors de l'écran
+            var docHeight = document.body.scrollHeight <= 4000 ? document.body.scrollHeight : 4000;
+
+            if (currentStep === 0) {
+                top = (docHeight <= 750 || force) ? 0 : top = (docHeight * self.options.popinTopPosition) - 200;
+            }
+
+            var scrollTop = $(window).scrollTop();
+
+            if (scrollTop !== 0) {
+                return $(window).scrollTop() >= top;
+            }
+            else {
+                return self.isElementShown();
+            }
+        } else {
+            return self.isElementShown();
+        }
+    };
+
+    Plugin.prototype.isElementVisibleViaUrl = function() {
+
+        var self = this;
+        var params = window.location.search.substring(1).split('&');
+
+        for (var i in params) {
+            var item = params[i].split('=');
+            if (item[0] === self.options.urlParamName && item[1] === self.options.urlParamValue) {
+                return true;
+            }
+        }
+        return false;
+    };
+
+    Plugin.prototype.isElementVisible = function() {
+        var cookie = this.options.cookie;
+
+        if (this.cookieExists(cookie.name) || !this.options.scrollable) {
+            return false;
+        }
+        return this.isElementInViewport();
+    };
+
+    Plugin.prototype.showElement = function() {
+        var self = this;
+
+        if (!opened) {
+            if (self.isElementVisibleViaUrl()) {
+                // opened = true;
+                self.options.scrollable = false;
+                $(window).off("scroll", self.showElement);
+                self.open(true);
+                return;
+            }
+
+            if (self.isElementVisible()) {
+                self.open();
+                return;
+            }
+        }
+    };
+
+    Plugin.prototype.displayLegal = function() {
+        var self = this;
+        self.$elemWrap
+            .on('focus', self.options.legalTriggerSelector, function() {
+                $('.' + self.options.legalElClass).addClass('active');
+            })
+            .on('blur', self.options.legalTriggerSelector, function() {
+                $('.' + self.options.legalElClass).removeClass('active');
+            });
+    };
+
+    Plugin.prototype.displayError = function(errorWrapperSelector, errorMsg) {
+        var self = this;
+        var tpl = [
+            '<h1 class="pmd-ms-tt-1 pmd-ms-error-tpl">' + errorMsg.title + '</h1>',
+            '<p class="pmd-ms-excerpt">' + errorMsg.content + '</p>'
+        ].join('');
+
+        self.close();
+
+        self.$elemWrap.bind('animationend', function() {
+            $(errorWrapperSelector).html(tpl);
+            self.open();
+
+            self.$elemWrap.unbind('animationend');
+            $(window).unbind('scroll');
+        });
+
+    };
+
+    Plugin.prototype.validate = function(field, form){
+        var self = this;
+        var requiredLink = field.getAttribute(self.options.requiredLink);
+
+        if (requiredLink) {
+            var fields = form.querySelectorAll('[' + self.options.requiredLink + '=' + requiredLink + ']');
+            var fieldsLength = fields.length;
+
+            for (var i = 0; i < fieldsLength; i++) {
+                if (fields[i].value.length > 0) {
+                    for (var b = 0; b < fieldsLength; b++) {
+                        fields[b].setAttribute('required', 'required');
+                    }
+                }
+            }
+        }
+
+        var isValid = field.checkValidity();
+        var parentNode = field.closest('.pmd-ms-field');
+        var errorMsg = field.getAttribute('data-error-msg');
+        var node;
+
+        if (!isValid) {
+            if (!parentNode.classList.contains(self.options.errorClass)) {
+                node = document.createElement("span");
+                node.className = self.options.errorMsgClass;
+                parentNode.appendChild(node);
+                node.innerHTML = errorMsg;
+                parentNode.classList.add(self.options.errorClass);
+            }
+        } else {
+            node = parentNode.querySelector('.'+self.options.errorMsgClass);
+
+            if (node) {
+                parentNode.removeChild(node);
+                parentNode.classList.remove(self.options.errorClass);
+            }
+        }
+    };
+
+    Plugin.prototype.validateForm = function() {
+        var self = this;
+        var form = $('.' + self.options.formClass)[0];
+
+        var formElLength = form.length,
+            i, field, requiredLink;
+
+        for (i = 0; i < formElLength; i++) {
+            field = form.elements[i];
+            requiredLink = field.getAttribute(self.options.requiredLink);
+
+            if(field.required || field.pattern || requiredLink) {
+                self.validate(field, form);
+
+                field.addEventListener('change', function() {
+                    self.validate(this, form);
+                });
+
+                field.addEventListener('blur', function() {
+                    self.validate(this, form);
+                });
+            }
+        }
+    };
+
+    Plugin.prototype.cancelStep = function() {
+        var self = this;
+        self.$elemWrap.on('click', '.' + self.options.cancelClass, function(e) {
+            e.preventDefault();
+
+            currentStep++;
+            // self.ajaxGet(self.pathName + '/' + self.options.stepFiles[currentStep].url)
+            self.ajaxGet(self.options.stepFiles[currentStep].url)
+                .success(function(response) {
+                    self.nextStep(response);
+                });
+        });
+    };
+
+    Plugin.prototype.nextStep = function(response) {
+        var self = this;
+
+        self.close();
+
+        self.$elemWrap.bind('animationend', function() {
+            $('.' + self.options.innerWrapperClass).html(response);
+            self.setTitle();
+
+            if ($('.' + self.options.formClass)[0]) {
+                self.submitForm();
+                self.cancelStep();
+                self.toggleSubmitBtnState();
+            }
+
+            self.open();
+
+            // remove binding
+            self.$elemWrap.unbind('animationend');
+            $(window).unbind('scroll');
+        });
+    };
+
+    Plugin.prototype.ajaxPost = function(url, data) {
+        return $.ajax({
+            url: url,
+            method: 'post',
+            dataType: 'json',
+            data: data,
+            success: function(response) {
+                return response;
+            },
+            error: function(response) {
+                return response;
+            }
+        });
+    };
+
+    Plugin.prototype.ajaxGet = function(url) {
+        var self = this;
+        return $.get(url, function(response) {
+            return response;
+        });
+    };
+
+    Plugin.prototype.submitForm = function() {
+        var self = this;
+
+        $('.' + self.options.formClass).on('submit', function(e) {
+            e.preventDefault();
+            self.validateForm();
+
+            var formError = $('.' + self.options.errorClass).length > 0;
+
+            if (formError) {
+                return false;
+            }
+
+            var formData = $(this).serialize();
+
+            // self.ajaxPost(self.pathName + '/' + self.options.url, formData)
+            self.ajaxPost(self.options.url, formData)
+                .success(function(response) {
+
+                    if (response.success == 'success') {
+                        currentStep++;
+                        if (currentStep < self.options.stepFiles.length) {
+                            // self.ajaxGet(self.pathName + '/' + self.options.stepFiles[currentStep].url)
+                            self.ajaxGet(self.options.stepFiles[currentStep].url)
+                                .done(function(response) {
+                                    self.nextStep(response);
+                                });
+                        }
+                    } else if (response.success == 'fail') {
+                        var errorMsg = {
+                            title: self.options.errorGenMsgTitle,
+                            content: response.errorMsg ? response.errorMsg : self.options.errorGenMsgContent
+                        };
+                        self.displayError('.' + self.options.innerWrapperClass, errorMsg);
+                    }
+                })
+                .error(function(response) {
+                    var errorMsg = {
+                        title: self.options.errorGenMsgTitle,
+                        content: self.options.errorGenMsgContent
+                    };
+                    self.displayError('.' + self.options.innerWrapperClass, errorMsg);
+                });
+        });
+    };
+
+    Plugin.prototype.init = function() {
+        var cookie = this.options.cookie;
+        if (this.options.scrollable && !this.cookieExists(cookie.name) && !this.isElementVisibleViaUrl()) {
+            currentStep = 0;
+            this.getCurrent();
+        }
+        this.showElement();
+    };
+
+    $.fn[pluginName] = function (options) {
+        return new Plugin(options);
+    };
+
+}(jQuery, window));

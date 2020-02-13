@@ -1,0 +1,110 @@
+/**
+ * The construct function
+ * 
+ * @author Benjamin Niess 
+ */
+jQuery( document ).ready(function() {
+	init();
+
+});
+
+/**
+ * When the login form is sumbitted, serialize data and send it to WordPress by ajax
+ * 
+ * @author Benjamin Niess 
+ */
+function prepare_login_form_submit() {
+	if ( jQuery(".bea-pws-login-form").length == 0 ) {
+		return false;
+	}
+	jQuery(".bea-pws-login-form").on('submit', function( e ) {
+		e.preventDefault();
+		
+		// Remove old error messages
+		remove_error_message();
+		
+		var current_form = jQuery(this);
+		
+		// Serialize all data in a string
+		var serialized_data = current_form.serialize();
+		
+		// Submit form by ajax
+		jQuery.ajax( {
+			url: bea_pws.ajaxurl,
+			type: "POST",
+			dataType : 'json',
+			data: serialized_data,
+			beforeSend : function() {
+				current_form.find('.loader-wrapper').addClass('visible');
+			}
+		} ).done( function() {
+			current_form.find('.loader-wrapper').removeClass('visible');
+		} ).success(function( response ) {
+			if ( typeof( response ) == 'undefined' ) {
+				return false;
+			}
+
+			if ( response.status == 'success' ) {
+				if( !jQuery('body').hasClass('single-magazine-post') ){
+					// Call init function again to reload content
+					init();
+					return false;
+				}else{
+					//Reload single magazine page on login
+					window.location.reload();
+				}
+			}
+			// If we have an error mesage, show it
+			display_error_message( response.message, current_form );
+		});
+		
+	});
+}
+
+/**
+ *The first function called to load forms html or user infos html inside blocks
+ * 
+ * @author Benjamin Niess 
+ */
+function init() {
+	
+	// The header login form
+	jQuery.ajax( {
+		url: bea_pws.ajaxurl,
+		type: "POST",
+		data: { action : 'load_user_login_area', zone : 'header' },
+		success: function( response ) {
+			jQuery( '#bea_user_login_area' ).addClass('hidden').html( response ).removeClass('hidden');
+			
+			// Test the second form (inside the content)
+			if ( jQuery("#bea_user_inside_post_login_area").length == 0 ) {
+				prepare_login_form_submit();
+			} else {
+				// Test the second form (inside the content)
+				jQuery.ajax( {
+					url: bea_pws.ajaxurl,
+					type: "POST",
+					data: { action : 'load_user_login_area', zone : 'inside-post', id : jQuery( '#bea_user_inside_post_login_area' ).data('post-id') },
+					success: function( response ) {
+						jQuery( '#bea_user_inside_post_login_area' ).fadeOut().html( response ).fadeIn();
+						prepare_login_form_submit();
+					}
+				} );
+			}
+		},
+	} );
+}
+
+/**
+ * Show a specific error message in a form
+ */
+function display_error_message( message, form ) {
+	form.next( '.error-message' ).show().html( '<p>' + message + '</p>' );
+}
+
+/**
+ * Hide all error messages 
+ */
+function remove_error_message() {
+	jQuery( '.error-message' ).hide().html( '' );
+}

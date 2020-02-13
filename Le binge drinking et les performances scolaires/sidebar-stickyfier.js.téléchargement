@@ -1,0 +1,176 @@
+/* ==========================================================================
+   Sidebar script
+   ========================================================================== */
+
+var defaults = {
+    namespace: 'sidebar'
+}
+var $W = $( window )
+/* -------------------------------------------------------------------------- */
+/**
+ * Module definition
+ */
+function sidebarSticky(el, options) {
+
+    var opts = $.extend( true, {}, defaults, options )
+    var $el = $( el ).eq( 0 )
+    var $parent = $el.offsetParent()
+
+    // exit if no element found
+    if ( !$el.length ) return
+
+    var windowWidth // used to check if the window width has changed on resize
+    var width // use to store the width of the sidebar (update on resize)
+    var right // used to store the right position of the sidebar (relative to the document)
+    var offsetTop // used to store the top position of the sidebar (update on resize)
+
+    /**
+     * Called when the window is resized
+     */
+    var throttle = function(func, limit) {
+        var inThrottle
+        return function() {
+            var args = arguments
+            var context = this
+          if (!inThrottle) {
+            func.apply(context, args)
+            inThrottle = true
+            setTimeout(function() {
+                inThrottle = false, limit
+            }, limit)
+          }
+        }
+      }
+
+    function onResize() {
+
+        reset()
+
+        // sidebar is fixed on scroll if on desktop
+        if ( $W.width() >= 728 ) {
+            $W.on( 'scroll.' + opts.namespace, throttle( onScroll, 60 ))
+            onScroll()
+        } else {
+            $W.off( 'scroll.' + opts.namespace )
+        }
+    }
+
+    /**
+     * Reset CSS properties that might have been previously changed
+     */
+    function reset() {
+
+        $el.css({
+            'top': '',
+            'width': '',
+            'right': '',
+            'position': ''
+        }).removeClass( 'fixed top' )
+
+        width = $el.outerWidth()
+        right = $W.width() - $el.offset().left - width
+        offsetTop = $el.offset().top
+    }
+
+    /**
+     * Called when the user scrolls
+     */
+    function onScroll() {
+
+        var height = $el.outerHeight()
+        var scrollTop = $W.scrollTop()
+        var parentTop = $parent.offset().top
+        var parentHeight = $parent.outerHeight()
+
+        if ( height > $el.siblings( '#content' ).outerHeight()) {
+            $W.off( 'scroll.' + opts.namespace )
+            return reset()
+        }
+
+        if ( height <= $W.height()) {
+
+            // height of the fixed header
+            var scrollShift = 0; //parseInt( $( '.header-top' ).outerHeight())
+
+            // if the scroll position has reached the top of the sidebar..
+            if ( scrollTop + scrollShift > offsetTop ) {
+
+                $el.css({
+                    'top': scrollShift,
+                    'width': width,
+                    'right': right
+                }).addClass( 'fixed top' )
+
+                // if the bottom of the scroll position has reached the bottom of
+                // the sidebar container
+                if ( scrollTop + scrollShift + height > parentTop + parentHeight ) {
+
+                    $el.css({
+                        'top': '',
+                        'right': '',
+                        'position': 'absolute'
+                    }).removeClass( 'top' )
+                } else {
+                    $el.css( 'position', '' )
+                }
+
+            } else reset()
+            
+        } else {
+            
+            var scrollBottom = scrollTop + $W.height()
+
+            $el.css( 'top', '' ).removeClass( 'top' )
+
+            // if the bottom of the scroll position has reached the bottom of the sidebar..
+            if ( scrollBottom > offsetTop + height ) {
+
+                $el.css({
+                    'width': width,
+                    'right': right
+                }).addClass( 'fixed' )
+
+                // if the bottom scroll position has reached the bottom of the sidebar container..
+                if ( scrollBottom > parentTop + parentHeight ) {
+                    $el.css({
+                        'right': '',
+                        'position': 'absolute'
+                    })
+                } else {
+                    $el.css( 'position', '' )
+                }
+            } else reset()
+        }
+    }
+
+    function debounce(func, wait, immediate) {
+        var timeout;
+        return function() {
+            var context = this, args = arguments;
+            var later = function() {
+                timeout = null;
+                if (!immediate) func.apply(context, args);
+            };
+            var callNow = immediate && !timeout;
+            clearTimeout(timeout);
+            timeout = setTimeout(later, wait);
+            if (callNow) func.apply(context, args);
+        };
+    };
+
+    /* -------------------------------------------------------------------------- */
+    /* Init */
+
+    $W.on( 'resize.' + opts.namespace, function() {
+        debounce(function() {
+            // exit if the window width hasnt changed
+            if ( windowWidth && windowWidth === $W.width()) return
+            ( windowWidth = $W.width()) && onResize()
+        }, 250);
+    })
+
+    onResize()
+
+}
+
+sidebarSticky( '#sidebar' );

@@ -1,0 +1,20 @@
+
+// On ready
+(function($, window) {
+    'use strict';
+
+    var PMD = PMD || {};
+
+    PMD.modalSubscription = $.fn.modalSubscription(window.pluginOptions);
+
+    $('.pmd-ms-trigger').on('click', function(e) {
+        e.preventDefault();
+        $(this).closest('.menu').removeClass('active');
+        PMD.modalSubscription.open(true);
+    });
+
+    $(window).scroll(function() {
+        PMD.modalSubscription.showElement();
+    });
+
+}(jQuery, window));
